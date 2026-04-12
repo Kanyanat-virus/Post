@@ -608,18 +608,18 @@ function updateCharts(data) {
                 const isA11 = pkg.includes('A11');
                 const isA12 = pkg.includes('A12');
                 const bgObj = isA11
-                    ? { bg: '#F8961E', border: '#E2881B', text: '#FFFFFF', unit: 'rgba(255,255,255,0.9)', sep: 'rgba(255,255,255,0.6)' }
+                    ? { bg: 'rgba(232, 122, 19, 0.12)', border: 'rgba(232, 122, 19, 0.3)', text: '#D16D11', unit: '#E87A13', sep: 'rgba(232, 122, 19, 0.4)' }
                     : isA12
-                    ? { bg: '#43AA8B', border: '#3B977C', text: '#FFFFFF', unit: 'rgba(255,255,255,0.9)', sep: 'rgba(255,255,255,0.6)' }
+                    ? { bg: 'rgba(47, 142, 110, 0.12)', border: 'rgba(47, 142, 110, 0.3)', text: '#277A5E', unit: '#2F8E6E', sep: 'rgba(47, 142, 110, 0.4)' }
                     : { bg: '#F8FAFC', border: '#E2E8F0', text: '#334155', unit: '#64748B', sep: '#CBD5E1' };
 
-                return `<div class="pkg-row" style="background:${bgObj.bg};border:2px solid ${bgObj.border};">
-                    <span class="pkg-label" style="color:${bgObj.text}">${pkg}</span>
-                    <div class="pkg-stats">
-                        <span class="pkg-count-num" style="color:${bgObj.text}">${count}</span>
-                        <span class="pkg-unit" style="color:${bgObj.unit}"> ราย</span>
-                        <span class="pkg-sep" style="color:${bgObj.sep}">·</span>
-                        <span class="pkg-pct" style="color:${bgObj.text}">${pct}%</span>
+                return `<div class="pkg-row" style="background:${bgObj.bg}; border:1.5px solid ${bgObj.border}; margin-bottom: 1rem; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; gap: 0.25rem;">
+                    <span class="pkg-label" style="color:${bgObj.text}; font-size: 0.95rem; font-weight: 700; letter-spacing: 0.3px;">${pkg}</span>
+                    <div class="pkg-stats" style="display: flex; align-items: baseline; justify-content: center; gap: 0.3rem;">
+                        <span class="pkg-count-num" style="color:${bgObj.text}; font-weight: 800; font-size: 1.5rem;">${count}</span>
+                        <span class="pkg-unit" style="color:${bgObj.unit}; font-size: 0.9rem; font-weight: 600;"> ราย</span>
+                        <span class="pkg-sep" style="color:${bgObj.sep}; font-size: 1rem; font-weight: bold; margin: 0 0.2rem;">·</span>
+                        <span class="pkg-pct" style="color:${bgObj.text}; font-size: 1.1rem; font-weight: 700;">${pct}%</span>
                     </div>
                 </div>`;
             }).join('');
