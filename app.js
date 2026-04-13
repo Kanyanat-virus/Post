@@ -8,6 +8,7 @@ let authData = []; // Auth records from Sheet 2
 
 // TomSelect instances
 let tsProvince, tsPostOffice, tsCustomer;
+let selectedEndDates = new Set(); // Custom date filter state
 
 // Chart.js instances
 let barChartInstance = null;
@@ -29,12 +30,13 @@ const DOM = {
 const COL = {
     timestamp: 'ประทับเวลา',
     province: 'จังหวัดที่สังกัด',
-    postOffice: 'จุดที่เปิดให้บริการ ( สามารถพิมพ์รหัส ปณ.เพื่อค้นหา ในช่องด้านล่างได้)',
-    customer: 'ชื่อลูกค้าที่อนุมัติสัญญา',
-    package: 'Package ที่อนุมัติฯ',  // ชื่อ column จริงใน Google Sheet
+    postOffice: 'จุดที่เปิดให้บริการ (สามารถพิมพ์รหัส ปณ.เพื่อค้นหา ในช่องด้านล่างได้)',
+    customer: 'ชื่อลูกค้าที่อนุมัติสัญญาฯ (กรณีต้องการอัพเดทข้อมูล โปรดระบุชื่อลูกค้าให้ถูกต้องตรงกับชื่อเดิมทุกตัวอักษร)',
+    package: 'Package ที่อนุมัติสัญญาฯ',
     file: 'แนบไฟล์รวมบันทึกทั้ง 3 หัวข้อ :\n1.แบบร่างอนุมัติ + สัญญาขนส่ง\n2.แจ้งปรับอัตราค่าบริการเรียกเก็บค่าขนส่งเพิ่มเติม\n3.หนังสือยืนยันการใช้บริการ Fuel Surcharge',
     itemType: 'ประเภทสิ่งของที่ฝากส่ง (ห้ามใช้กับสินค้าประเภท ผลไม้ ต้นไม้)',
-    itemTypeOther: 'โปรดระบุประเภทสิ่งของที่ฝากส่งกรณีเลือก สินค้าประเภทอื่น ๆ'
+    itemTypeOther: 'โปรดระบุประเภทสิ่งของที่ฝากส่งกรณีเลือก สินค้าประเภทอื่น ๆ',
+    endDate: 'วันที่สิ้นสุดสัญญาฯ (ตามบันทึกฉบับล่าสุด)'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -43,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     DOM.refreshBtn.addEventListener('click', fetchData);
     DOM.resetFilterBtn.addEventListener('click', resetFilters);
+    initDateFilter();
 
     // Logout button
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
@@ -271,6 +274,163 @@ function initSelects() {
     tsPostOffice = new TomSelect('#filterPostOffice', { ...commonConfig, placeholder: "ที่ทำการ/รหัส ปณ." });
 }
 
+// --- Date Filter (custom checkbox dropdown) ---
+let allAvailableEndDates = [];
+
+function initDateFilter() {
+    const btn = document.getElementById('dateFilterBtn');
+    const dropdown = document.getElementById('dateFilterDropdown');
+
+    btn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.style.display !== 'none';
+        dropdown.style.display = isOpen ? 'none' : 'block';
+        lucide.createIcons();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.date-filter-wrap')) {
+            if (dropdown) dropdown.style.display = 'none';
+        }
+    });
+
+    document.getElementById('dateSelectAll')?.addEventListener('click', () => {
+        selectedEndDates.clear();
+        renderDateCheckboxList(allAvailableEndDates);
+        updateDateFilterLabel();
+        handleFilterChange();
+    });
+}
+
+function renderDateCheckboxList(dates) {
+    const container = document.getElementById('dateCheckboxList');
+    if (!container) return;
+    container.innerHTML = '';
+    const sorted = [...dates].sort();
+    sorted.forEach(d => {
+        const isChecked = selectedEndDates.size === 0 || selectedEndDates.has(d);
+        const item = document.createElement('label');
+        item.className = 'date-checkbox-item';
+        
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = d;
+        cb.checked = isChecked;
+        
+        const span = document.createElement('span');
+        span.textContent = d;
+        span.style.flex = "1";
+        
+        const onlyBtn = document.createElement('button');
+        onlyBtn.type = 'button';
+        onlyBtn.className = 'date-only-btn';
+        onlyBtn.textContent = 'เฉพาะวันนี้';
+        
+        onlyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectedEndDates.clear();
+            selectedEndDates.add(d);
+            updateDateFilterLabel();
+            handleFilterChange();
+            renderDateCheckboxList(allAvailableEndDates);
+        });
+
+        cb.addEventListener('change', () => {
+            if (selectedEndDates.size === 0) {
+                allAvailableEndDates.forEach(od => { if (od !== d) selectedEndDates.add(od); });
+            } else {
+                if (cb.checked) selectedEndDates.add(d);
+                else selectedEndDates.delete(d);
+                if (selectedEndDates.size === allAvailableEndDates.length) selectedEndDates.clear();
+            }
+            updateDateFilterLabel();
+            handleFilterChange();
+            renderDateCheckboxList(allAvailableEndDates);
+        });
+        
+        item.appendChild(cb);
+        item.appendChild(span);
+        item.appendChild(onlyBtn);
+        
+        container.appendChild(item);
+    });
+}
+
+function updateDateFilterLabel() {
+    var label = document.getElementById('dateFilterLabel');
+    var btn = document.getElementById('dateFilterBtn');
+    if (!label) return;
+    if (selectedEndDates.size === 0) {
+        label.textContent = 'วันที่สิ้นสุดสัญญาฯ';
+        if (btn) btn.classList.remove('has-selection');
+    } else if (selectedEndDates.size === 1) {
+        label.textContent = [...selectedEndDates][0];
+        if (btn) btn.classList.add('has-selection');
+    } else {
+        label.textContent = 'เลือก ' + selectedEndDates.size + ' วันที่';
+        if (btn) btn.classList.add('has-selection');
+    }
+}
+
+// --- AI Alert Section ---
+function renderAIAlert(data) {
+    var body = document.getElementById('aiAlertBody');
+    var monthLabel = document.getElementById('aiAlertMonthLabel');
+    if (!body) return;
+
+    var now = new Date();
+    var thisMonth = now.getMonth();
+    var thisYear = now.getFullYear();
+    var thMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+    if (monthLabel) monthLabel.textContent = 'ประจำเดือน ' + thMonths[thisMonth] + ' ' + (thisYear + 543);
+
+    var expiring = data.filter(function(item) {
+        var d = item.processedContractEndDate;
+        if (!d || d === 'ไม่ระบุ') return false;
+        var parts = d.split('/');
+        if (parts.length !== 3) return false;
+        var month = parseInt(parts[1]) - 1;
+        var year = parseInt(parts[2]);
+        return month === thisMonth && year === thisYear;
+    });
+
+    var a11 = expiring.filter(function(i) { return i.processedPackage && i.processedPackage.includes('A11'); });
+    var a12 = expiring.filter(function(i) { return i.processedPackage && i.processedPackage.includes('A12'); });
+    var other = expiring.filter(function(i) { return !(i.processedPackage && (i.processedPackage.includes('A11') || i.processedPackage.includes('A12'))); });
+
+    if (expiring.length === 0) {
+        body.innerHTML = '<p class="ai-no-expiry">✅ เดือนนี้ไม่มีลูกค้าที่สัญญาสิ้นสุด ทุกสัญญายังคงมีผลอยู่</p>';
+        return;
+    }
+
+    var otherHTML = other.length > 0 ? ', อื่นๆ: <strong>' + other.length + ' ราย</strong>' : '';
+
+    body.innerHTML =
+        '<div class="ai-alert-stat-card main-stat">' +
+            '<div class="ai-stat-label">สิ้นสุดเดือนนี้</div>' +
+            '<div class="ai-stat-num" style="color:var(--primary)">' + expiring.length + '</div>' +
+            '<div class="ai-stat-sub">ราย</div>' +
+        '</div>' +
+        '<div class="ai-alert-stat-card">' +
+            '<div class="ai-stat-label">Package A11</div>' +
+            '<div class="ai-stat-num" style="color:#E87A13">' + a11.length + '</div>' +
+            '<div class="ai-stat-sub">ราย</div>' +
+        '</div>' +
+        '<div class="ai-alert-stat-card">' +
+            '<div class="ai-stat-label">Package A12</div>' +
+            '<div class="ai-stat-num" style="color:#2F8E6E">' + a12.length + '</div>' +
+            '<div class="ai-stat-sub">ราย</div>' +
+        '</div>' +
+        '<div class="ai-alert-message">' +
+            '📋 <strong>สรุปสัญญาสิ้นสุดเดือน' + thMonths[thisMonth] + ':</strong><br>' +
+            'มีลูกค้า <strong>' + expiring.length + ' ราย</strong> ' +
+            '(Package A11: <strong>' + a11.length + ' ราย</strong>, ' +
+            'Package A12: <strong>' + a12.length + ' ราย</strong>' + otherHTML + ')' +
+        '</div>';
+}
+
 // Helper to convert DD/MM/YYYY, HH:mm:ss to timestamp
 function parseDateStrToTimestamp(dateStr) {
     if (!dateStr) return 0;
@@ -347,6 +507,7 @@ function processRawData(data) {
                 processedPackage: row[COL.package]?.trim() || '-',
                 processedItemType: row[COL.itemType]?.trim() || '-',
                 processedItemTypeOther: row[COL.itemTypeOther]?.trim() || '',
+                processedContractEndDate: row[COL.endDate]?.trim() || 'ไม่ระบุ',
                 processedFile: row[COL.file]?.trim() || ''
             };
         }
@@ -361,6 +522,7 @@ function processRawData(data) {
     // Init charts on first load, update after
     if (!barChartInstance) initCharts();
     updateCharts(processedData);
+    renderAIAlert(processedData);
 }
 
 // Update the options available in dropdowns based on the available dataset
@@ -369,27 +531,32 @@ function updateFilterOptions(dataSet) {
     const provinces = new Set();
     const postOffices = new Set();
     const customers = new Set();
+    const endDates = new Set();
 
     dataSet.forEach(item => {
         if(item.processedProvince) provinces.add(item.processedProvince);
         if(item.processedPostOffice) postOffices.add(item.processedPostOffice);
         if(item.processedCustomer) customers.add(item.processedCustomer);
+        if(item.processedContractEndDate && item.processedContractEndDate !== 'ไม่ระบุ') endDates.add(item.processedContractEndDate);
     });
+
+    // Update available date list for checkbox filter
+    allAvailableEndDates = [...endDates].sort();
+    renderDateCheckboxList(allAvailableEndDates);
 
     // Helper to update TomSelect silently
     const updateTS = (tsInstance, items) => {
         const currentVal = tsInstance.getValue();
         tsInstance.clearOptions();
-        
-        // Convert set to array of objects
         const optionsList = Array.from(items).map(i => ({value: i, text: i}));
         tsInstance.addOptions(optionsList);
-        
-        // If current value is still in the new list, keep it selected
-        if (currentVal && items.has(currentVal)) {
-            tsInstance.setValue(currentVal, true); // true = silent, don't trigger onChange
+        if (Array.isArray(currentVal)) {
+            const validVals = currentVal.filter(v => items.has(v));
+            if (validVals.length > 0) tsInstance.setValue(validVals, true);
+            else tsInstance.clear(true);
         } else {
-            tsInstance.clear(true);
+            if (currentVal && items.has(currentVal)) tsInstance.setValue(currentVal, true);
+            else tsInstance.clear(true);
         }
     };
 
@@ -401,30 +568,29 @@ function updateFilterOptions(dataSet) {
 let isUpdatingFilters = false;
 
 function handleFilterChange() {
-    // Prevent recursive loop caused by .clearOptions() destroying the selected value
     if (isUpdatingFilters) return;
 
     const sProv = tsProvince.getValue();
     const sPO = tsPostOffice.getValue();
     const sCust = tsCustomer.getValue();
+    // Use custom checkbox set; empty = all selected
+    const sEndDates = selectedEndDates.size > 0 ? [...selectedEndDates] : [];
 
-    // Cascading filter logic:
-    // Determine the subset of data that matches currently selected values
     filteredData = processedData.filter(item => {
         const matchProv = !sProv || item.processedProvince === sProv;
         const matchPO = !sPO || item.processedPostOffice === sPO;
         const matchCust = !sCust || item.processedCustomer === sCust;
-        return matchProv && matchPO && matchCust;
+        const matchEndDate = sEndDates.length === 0 || sEndDates.includes(item.processedContractEndDate);
+        return matchProv && matchPO && matchCust && matchEndDate;
     });
 
-    // Dynamically update other dropdown options to only show valid choices related to the current filter
     isUpdatingFilters = true;
     updateCascadingOptions(sProv, sPO, sCust);
     isUpdatingFilters = false;
 
-    // Render results
     renderCards(filteredData);
     updateCharts(filteredData);
+    renderAIAlert(filteredData);
 }
 
 // Function specifically to update dropdowns based on selections without infinite loops
@@ -441,22 +607,17 @@ function updateCascadingOptions(sProv, sPO, sCust) {
     if (sProv) availableForCust = availableForCust.filter(i => i.processedProvince === sProv);
     if (sPO) availableForCust = availableForCust.filter(i => i.processedPostOffice === sPO);
 
-    // Update Province options visually
     const provSet = new Set(availableForProv.map(i => i.processedProvince));
     updateTSVisualOnly(tsProvince, provSet, sProv);
-
-    // Update PostOffice options visually
     const poSet = new Set(availableForPO.map(i => i.processedPostOffice));
     updateTSVisualOnly(tsPostOffice, poSet, sPO);
-
-    // Update Customer options visually
     const custSet = new Set(availableForCust.map(i => i.processedCustomer));
     updateTSVisualOnly(tsCustomer, custSet, sCust);
 }
 
 function updateTSVisualOnly(tsInstance, itemsSet, currentVal) {
     let targetVal = currentVal;
-    if (itemsSet.size === 1 && !currentVal) {
+    if (itemsSet.size === 1 && (!currentVal || currentVal.length === 0)) {
         targetVal = Array.from(itemsSet)[0]; // Auto-select if there's exactly 1 valid option left
     }
 
@@ -466,10 +627,16 @@ function updateTSVisualOnly(tsInstance, itemsSet, currentVal) {
     tsInstance.clearOptions();
     tsInstance.addOptions(opts);
     
-    if (targetVal && itemsSet.has(targetVal)) {
-        tsInstance.setValue(targetVal, true);
+    if (Array.isArray(targetVal)) {
+        const validVals = targetVal.filter(v => itemsSet.has(v));
+        if (validVals.length > 0) tsInstance.setValue(validVals, true);
+        else tsInstance.clear(true);
     } else {
-        tsInstance.clear(true);
+        if (targetVal && itemsSet.has(targetVal)) {
+            tsInstance.setValue(targetVal, true);
+        } else {
+            tsInstance.clear(true);
+        }
     }
 }
 
@@ -477,10 +644,14 @@ function resetFilters() {
     tsProvince.clear(true);
     tsPostOffice.clear(true);
     tsCustomer.clear(true);
+    selectedEndDates.clear();
+    renderDateCheckboxList(allAvailableEndDates);
+    updateDateFilterLabel();
     
     updateFilterOptions(processedData);
     renderCards(processedData);
     updateCharts(processedData);
+    renderAIAlert(processedData);
 }
 
 // ─── CHARTS ────────────────────────────────────────────────────────────────
@@ -726,6 +897,35 @@ function renderCards(data, showAll = false) {
                 displayItemType = `สินค้าประเภทอื่น ๆ<br><span style="font-size: 0.8em; font-weight: 500; opacity: 0.85;">👉 ${item.processedItemTypeOther}</span>`;
             }
 
+            // Contract End Date Logic
+            let endDateHTML = '';
+            if (item.processedContractEndDate && item.processedContractEndDate !== 'ไม่ระบุ') {
+                const parts = item.processedContractEndDate.split('/');
+                if (parts.length === 3) {
+                    const d = parseInt(parts[0]);
+                    const m = parseInt(parts[1]) - 1;
+                    const y = parseInt(parts[2]);
+                    const endDt = new Date(y, m, d);
+                    const now = new Date();
+                    const diffDays = Math.ceil((endDt - now) / (1000 * 60 * 60 * 24));
+                    
+                    let badgeClass = '';
+                    let icon = '<i data-lucide="calendar" style="width:14px;height:14px;"></i>';
+                    if (diffDays < 0) {
+                        badgeClass = 'expired';
+                        icon = '<i data-lucide="alert-circle" style="width:14px;height:14px;"></i>';
+                    } else if (diffDays <= 30) {
+                        badgeClass = 'expiring-soon';
+                        icon = '<i data-lucide="clock" style="width:14px;height:14px;"></i>';
+                    }
+                    endDateHTML = `<span class="enddate-badge ${badgeClass}">${icon}${item.processedContractEndDate}</span>`;
+                } else {
+                    endDateHTML = `<span class="enddate-badge"><i data-lucide="calendar" style="width:14px;height:14px;"></i>${item.processedContractEndDate}</span>`;
+                }
+            } else {
+                endDateHTML = `<span style="color:var(--text-muted);font-size:0.8rem;">-</span>`;
+            }
+
             // File Actions
             const hasFile = item.processedFile && item.processedFile !== '-';
             const actionHTML = hasFile
@@ -751,6 +951,10 @@ function renderCards(data, showAll = false) {
                 
                 <div class="cell-type">
                     <span class="status-badge" style="${dynamicStyle}">${displayItemType}</span>
+                </div>
+                
+                <div class="cell-enddate">
+                    ${endDateHTML}
                 </div>
                 
                 <div class="cell-action">

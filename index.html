@@ -110,6 +110,21 @@
                 <div class="select-wrap">
                     <select id="filterPostOffice" placeholder="ที่ทำการ/รหัส ปณ."></select>
                 </div>
+                <div class="filter-divider"></div>
+                <div class="select-wrap date-filter-wrap" style="position:relative;">
+                    <button id="dateFilterBtn" class="date-filter-btn" type="button">
+                        <i data-lucide="calendar" style="width:14px;height:14px;"></i>
+                        <span id="dateFilterLabel">วันที่สิ้นสุดสัญญาฯ</span>
+                        <i data-lucide="chevron-down" style="width:12px;height:12px;margin-left:auto;"></i>
+                    </button>
+                    <div id="dateFilterDropdown" class="date-filter-dropdown" style="display:none;">
+                        <div class="date-filter-header">
+                            <span>เลือกวันที่สิ้นสุดสัญญาฯ</span>
+                            <button type="button" id="dateSelectAll" class="date-select-all-btn">ทั้งหมด</button>
+                        </div>
+                        <div id="dateCheckboxList" class="date-checkbox-list"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Right Actions -->
@@ -144,6 +159,20 @@
             <!-- Content Area (hidden until data loads) -->
             <div id="dashboardContent" style="display: none;">
                 
+            <!-- ========= AI Alert Section ========= -->
+            <div id="aiAlertSection" class="ai-alert-section">
+                <div class="ai-alert-header">
+                    <div class="ai-alert-icon"><i data-lucide="bot"></i></div>
+                    <div>
+                        <div class="ai-alert-title">ผู้ช่วยสรุปข้อมูล (AI Assistant)</div>
+                        <div class="ai-alert-subtitle" id="aiAlertMonthLabel"></div>
+                    </div>
+                </div>
+                <div class="ai-alert-body" id="aiAlertBody">
+                    <div class="ai-alert-loading"><i data-lucide="loader-circle" class="spin"></i> กำลังวิเคราะห์...</div>
+                </div>
+            </div>
+
             <!-- ========= Charts Section ========= -->
             <div class="charts-grid">
                 <!-- Stats Card -->
@@ -175,12 +204,13 @@
 
                     <!-- Column Headers match grid layout -->
                     <div class="list-columns">
-                        <div class="col-head col-client">ชื่อลูกค้า (Client title)</div>
-                        <div class="col-head col-province">จังหวัด (Province)</div>
-                        <div class="col-head col-office">จุดบริการ (Office)</div>
+                        <div class="col-head col-client">ชื่อลูกค้า</div>
+                        <div class="col-head col-province">จังหวัด</div>
+                        <div class="col-head col-office">จุดบริการ</div>
                         <div class="col-head col-package">Package</div>
-                        <div class="col-head col-type">ประเภทสิ่งของ (Type)</div>
-                        <div class="col-head col-action" style="text-align: right;">เอกสารแนบ (Files)</div>
+                        <div class="col-head col-type">ประเภทสิ่งของ</div>
+                        <div class="col-head col-enddate">วันสิ้นสุดสัญญา</div>
+                        <div class="col-head col-action" style="text-align: right;">เอกสารแนบ</div>
                     </div>
 
                     <div id="noDataResult" class="state-panel empty-state" style="display: none;">
