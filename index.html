@@ -87,7 +87,7 @@
         <header class="top-bar">
             <!-- Left Side Logo/Title -->
             <div class="brand">
-                <div class="brand-icon">
+                <div class="brand-icon" id="dashboardIcon">
                     <i data-lucide="layout-dashboard"></i>
                 </div>
                 <div style="display: flex; flex-direction: column;">
@@ -114,12 +114,12 @@
                 <div class="select-wrap date-filter-wrap" style="position:relative;">
                     <button id="dateFilterBtn" class="date-filter-btn" type="button">
                         <i data-lucide="calendar" style="width:14px;height:14px;"></i>
-                        <span id="dateFilterLabel">วันที่สิ้นสุดสัญญาฯ</span>
+                        <span id="dateFilterLabel">วันที่สิ้นสุดสัญญา</span>
                         <i data-lucide="chevron-down" style="width:12px;height:12px;margin-left:auto;"></i>
                     </button>
                     <div id="dateFilterDropdown" class="date-filter-dropdown" style="display:none;">
                         <div class="date-filter-header">
-                            <span>เลือกวันที่สิ้นสุดสัญญาฯ</span>
+                            <span>เลือกวันที่สิ้นสุดสัญญา</span>
                             <button type="button" id="dateSelectAll" class="date-select-all-btn">ทั้งหมด</button>
                         </div>
                         <div id="dateCheckboxList" class="date-checkbox-list"></div>
@@ -232,6 +232,28 @@
     <button id="scrollToTop" class="fab-btn" title="ขึ้นด้านบนสุด">
         <i data-lucide="arrow-up"></i>
     </button>
+
+    <!-- Admin Logs Modal -->
+    <div id="logsModalOverlay" class="login-overlay" style="display: none; align-items: center; z-index: 1000;">
+        <div class="login-card" style="max-width: 600px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; position: relative;">
+            <button id="modalScrollTopBtn" class="fab-btn" title="ขึ้นด้านบนสุด" style="position: absolute; bottom: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; opacity: 0; pointer-events: none; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 10;">
+                <i data-lucide="arrow-up" style="width: 18px; height: 18px;"></i>
+            </button>
+            <div class="login-header" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div class="brand-icon" style="width: 40px; height: 40px; border-radius: 12px;"><i data-lucide="history"></i></div>
+                    <div style="text-align: left;">
+                        <div class="brand-title" style="font-size: 1.25rem;">ประวัติการเข้าใช้งาน</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);">เฉพาะผู้ดูแลระบบ (Admin)</div>
+                    </div>
+                </div>
+                <button type="button" id="closeLogsBtn" class="action-btn" style="border: none; background: transparent;"><i data-lucide="x"></i></button>
+            </div>
+            <div id="logsContainer" class="date-checkbox-list" style="max-height: 50vh; overflow-y: auto; padding-right: 0.5rem; text-align: left;">
+                <div style="text-align: center; padding: 2rem;"><i data-lucide="loader-circle" class="spin"></i> กำลังโหลดประวัติ...</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Script -->
     <script src="app.js?v=6"></script>

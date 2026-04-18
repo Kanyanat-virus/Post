@@ -1,10 +1,9 @@
-const DB_ID = '1y0Ob_eSJVMCjPOCpflsOy5tZJY3BOY3DEX974qcTxx8';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxw4dEm75lbDzl6rEEVdDR9uRXqYnKUnG3Rv-TUf2Hvf077VtG5heqCOIam_WTXd6zz-w/exec';
 
 // Global Data variables
 let rawData = [];
 let processedData = [];
 let filteredData = [];
-let authData = []; // Auth records from Sheet 2
 
 // TomSelect instances
 let tsProvince, tsPostOffice, tsCustomer;
@@ -36,7 +35,7 @@ const COL = {
     file: 'แนบไฟล์รวมบันทึกทั้ง 3 หัวข้อ :\n1.แบบร่างอนุมัติ + สัญญาขนส่ง\n2.แจ้งปรับอัตราค่าบริการเรียกเก็บค่าขนส่งเพิ่มเติม\n3.หนังสือยืนยันการใช้บริการ Fuel Surcharge',
     itemType: 'ประเภทสิ่งของที่ฝากส่ง (ห้ามใช้กับสินค้าประเภท ผลไม้ ต้นไม้)',
     itemTypeOther: 'โปรดระบุประเภทสิ่งของที่ฝากส่งกรณีเลือก สินค้าประเภทอื่น ๆ',
-    endDate: 'วันที่สิ้นสุดสัญญาฯ (ตามบันทึกฉบับล่าสุด)'
+    endDate: 'วันที่สิ้นสุดสัญญาฯ'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -51,8 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
         sessionStorage.removeItem('dashboardAuth');
         sessionStorage.removeItem('dashboardUser');
+        sessionStorage.removeItem('dashboardEmail');
+        sessionStorage.removeItem('dashboardPass');
         location.reload();
     });
+
+    setupAdminFeatures();
 
     // FAB scroll to top logic
     const fab = document.getElementById('scrollToTop');
@@ -105,85 +108,7 @@ async function initAuth() {
         fetchData();
         return;
     }
-    // ตั้งค่า event listeners ของ login form ทันที สำคัญ: ต้องเรียกก่อน fetchAuthData()
     setupLoginForm();
-    // Pre-fetch auth data ใน background
-    fetchAuthData().catch(() => {});
-}
-
-// Fetch Google Data using native Google Visualization API (JSONP) - bypasses CORS & proxies entirely
-function fetchGvizData(gid) {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = `https://docs.google.com/spreadsheets/d/${DB_ID}/gviz/tq?tqx=out:json&headers=1&gid=${gid}&_cb=${new Date().getTime()}`;
-        
-        window.google = window.google || {};
-        window.google.visualization = window.google.visualization || {};
-        window.google.visualization.Query = window.google.visualization.Query || {};
-        
-        const oldSetResponse = window.google.visualization.Query.setResponse;
-        
-        window.google.visualization.Query.setResponse = function(response) {
-            if (oldSetResponse) window.google.visualization.Query.setResponse = oldSetResponse;
-            setTimeout(() => { if (script.parentNode) script.remove() }, 100);
-            
-            if (response.status === 'error') {
-                reject(new Error(response.errors[0].message));
-                return;
-            }
-            
-            const headers = response.table.cols.map(c => c ? c.label : '');
-            const data = [];
-            response.table.rows.forEach(r => {
-                let rowObj = {};
-                r.c.forEach((cell, i) => {
-                    const header = headers[i];
-                    if (header) {
-                        rowObj[header] = cell ? (cell.f || cell.v || '') : '';
-                    }
-                });
-                data.push(rowObj);
-            });
-            resolve(data);
-        };
-        
-        script.onerror = () => {
-            if (oldSetResponse) window.google.visualization.Query.setResponse = oldSetResponse;
-            if (script.parentNode) script.remove();
-            reject(new Error("เบราว์เซอร์ล้มเหลวในการเชื่อมต่อกับ Google API"));
-        };
-        
-        document.body.appendChild(script);
-        setTimeout(() => reject(new Error("Timeout: Google Sheets is not responding")), 15000);
-    });
-}
-
-async function fetchAuthData() {
-    try {
-        const data = await fetchGvizData('740345837');
-        authData = data.map(row => ({
-            email: (row['ที่อยู่อีเมล'] || '').trim().toLowerCase(),
-            password: (row['รหัสผ่าน'] || '').trim(),
-            name: (row['ชื่อ-นามสกุล'] || '').trim()
-        }));
-    } catch (e) {
-        console.warn("Failed to load auth data:", e);
-    }
-}
-
-function validateCredentials(email, password) {
-    if (!email || !password)
-        return { ok: false, msg: 'กรุณากรอกอีเมลและรหัสผ่าน' };
-
-    const user = authData.find(u => u.email === email);
-    if (!user)
-        return { ok: false, msg: 'ไม่พบอีเมลนี้ในระบบ กรุณาขอสิทธิ์เข้าถึงก่อน' };
-    if (!user.password)
-        return { ok: false, msg: 'บัญชีนี้ยังไม่ได้รับการอนุมัติรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ' };
-    if (user.password !== password)
-        return { ok: false, msg: 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' };
-
-    return { ok: true, name: user.name };
 }
 
 function setupLoginForm() {
@@ -210,35 +135,41 @@ function setupLoginForm() {
         lucide.createIcons();
         errEl.style.display = 'none';
 
-        // Make sure auth data is loaded
-        if (authData.length === 0) {
-            try { await fetchAuthData(); } catch(err) {
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = '<i data-lucide="log-in"></i> เข้าสู่ระบบ';
-                lucide.createIcons();
-                errEl.textContent = 'ไม่สามารถตรวจสอบข้อมูลได้ กรุณาลองใหม่';
+        try {
+            // Fetch backend API to login
+            const url = `${API_URL}?action=login&email=${encodeURIComponent(email)}&pass=${encodeURIComponent(password)}`;
+            const res = await fetch(url);
+            const result = await res.json();
+
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = '<i data-lucide="log-in"></i> เข้าสู่ระบบ';
+            lucide.createIcons();
+
+            if (result.ok) {
+                // Save user session
+                sessionStorage.setItem('dashboardAuth', 'true');
+                sessionStorage.setItem('dashboardUser', result.name);
+                sessionStorage.setItem('dashboardEmail', email); // Save for admin check
+                sessionStorage.setItem('dashboardPass', password); // Support API queries
+
+                hideLoginOverlay(result.name);
+                setupAdminFeatures();
+                fetchData();
+            } else {
+                errEl.textContent = result.msg || 'เข้าสู่ระบบล้มเหลว';
                 errEl.style.display = 'block';
-                return;
+                const card = document.querySelector('.login-card');
+                card.classList.add('shake');
+                setTimeout(() => card.classList.remove('shake'), 500);
             }
-        }
-
-        const result = validateCredentials(email, password);
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = '<i data-lucide="log-in"></i> เข้าสู่ระบบ';
-        lucide.createIcons();
-
-        if (result.ok) {
-            sessionStorage.setItem('dashboardAuth', 'true');
-            sessionStorage.setItem('dashboardUser', result.name);
-            hideLoginOverlay(result.name);
-            fetchData();
-        } else {
-            errEl.textContent = result.msg;
+        } catch (err) {
+            console.error('Login error:', err);
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = '<i data-lucide="log-in"></i> เข้าสู่ระบบ';
+            lucide.createIcons();
+            
+            errEl.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
             errEl.style.display = 'block';
-            // Shake animation
-            const card = document.querySelector('.login-card');
-            card.classList.add('shake');
-            setTimeout(() => card.classList.remove('shake'), 500);
         }
     });
 }
@@ -252,6 +183,149 @@ function hideLoginOverlay(userName) {
     }
     overlay.classList.add('fade-out');
     setTimeout(() => overlay.style.display = 'none', 400);
+}
+
+// ==== Admin & Logs Logic ====
+
+
+function setupAdminFeatures() {
+    const email = sessionStorage.getItem('dashboardEmail');
+    const adminBtn = document.getElementById('dashboardIcon');
+    const logsModal = document.getElementById('logsModalOverlay');
+    const closeBtn = document.getElementById('closeLogsBtn');
+    
+    if (!adminBtn || !logsModal) return;
+
+    // Check if admin
+    if (email === 'sales.reg6@gmail.com' || email === 'kanyanat.ra@thailandpost.com') {
+        adminBtn.classList.add('admin-active');
+        adminBtn.style.cursor = 'pointer';
+        adminBtn.title = 'ดูประวัติการเข้าใช้งาน (Admin)';
+        
+        // Remove old listeners to avoid duplicates
+        const newBtn = adminBtn.cloneNode(true);
+        adminBtn.parentNode.replaceChild(newBtn, adminBtn);
+        
+        newBtn.addEventListener('click', () => {
+            logsModal.style.display = 'flex';
+            fetchLogData();
+        });
+    } else {
+        adminBtn.classList.remove('admin-active');
+        adminBtn.style.cursor = 'default';
+        adminBtn.title = '';
+        
+        const newBtn = adminBtn.cloneNode(true);
+        adminBtn.parentNode.replaceChild(newBtn, adminBtn);
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            logsModal.style.display = 'none';
+        });
+    }
+
+    const modalScrollBtn = document.getElementById('modalScrollTopBtn');
+    const logsContainer = document.getElementById('logsContainer');
+    
+    if (modalScrollBtn && logsContainer) {
+        logsContainer.addEventListener('scroll', () => {
+            if (logsContainer.scrollTop > 150) {
+                modalScrollBtn.style.opacity = '1';
+                modalScrollBtn.style.pointerEvents = 'auto';
+                modalScrollBtn.style.transform = 'translateY(-10px)';
+            } else {
+                modalScrollBtn.style.opacity = '0';
+                modalScrollBtn.style.pointerEvents = 'none';
+                modalScrollBtn.style.transform = 'translateY(0)';
+            }
+        });
+        
+        modalScrollBtn.addEventListener('click', () => {
+            logsContainer.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    }
+}
+
+let currentLogData = [];
+
+async function fetchLogData() {
+    const container = document.getElementById('logsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="text-align: center; padding: 2rem;"><i data-lucide="loader-circle" class="spin"></i> กำลังโหลดประวัติ...</div>';
+    lucide.createIcons();
+    
+    try {
+        const email = sessionStorage.getItem('dashboardEmail') || '';
+        const pass = sessionStorage.getItem('dashboardPass') || '';
+        const url = `${API_URL}?action=getLogs&email=${encodeURIComponent(email)}&pass=${encodeURIComponent(pass)}`;
+        
+        const res = await fetch(url);
+        const result = await res.json();
+        
+        if (!result.ok || !result.data || result.data.length <= 1) {
+            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">ไม่มีประวัติการเข้าใช้งาน</div>';
+            return;
+        }
+        
+        // Remove header row and sort descending by timestamp (newest first)
+        currentLogData = result.data.slice(1).reverse(); 
+        renderLogs(false);
+        
+    } catch (err) {
+        console.error('Fetch Logs Error:', err);
+        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--danger);">เกิดข้อผิดพลาดในการโหลดประวัติ</div>';
+    }
+}
+
+function renderLogs(showAll) {
+    const container = document.getElementById('logsContainer');
+    if (!container || currentLogData.length === 0) return;
+    
+    let html = '';
+    const limit = showAll ? currentLogData.length : 10;
+    const displayData = currentLogData.slice(0, limit);
+    
+    displayData.forEach(row => {
+        // GAS returns arrays: row[0] is timestamp, row[1] is email
+        const tsRaw = row[0];
+        const emailRaw = row[1];
+        if (!emailRaw) return;
+        
+        // The display string is already handled by getDisplayValues() in GAS
+        let timeStr = String(tsRaw);
+        
+        html += `
+            <div style="display: flex; gap: 1rem; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                <div class="cell-avatar bg-c3" style="width: 32px; height: 32px;"><i data-lucide="user" style="width: 16px; height: 16px;"></i></div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--text-dark); font-size: 0.95rem;">${emailRaw}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);"><i data-lucide="clock" style="width:12px;height:12px;display:inline;margin-right:4px;"></i> ${timeStr}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (!showAll && currentLogData.length > 10) {
+        html += `
+            <div style="text-align: center; padding: 1rem;">
+                <button id="showAllLogsBtn" class="action-btn" style="border: 1px solid var(--border-color); background: #fff; padding: 0.5rem 1rem; margin: 0 auto; width: fit-content;">ดูประวัติทั้งหมด (${currentLogData.length})</button>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+    lucide.createIcons();
+    
+    if (!showAll && currentLogData.length > 10) {
+        document.getElementById('showAllLogsBtn')?.addEventListener('click', () => {
+            renderLogs(true);
+        });
+    }
 }
 
 
@@ -306,7 +380,7 @@ function renderDateCheckboxList(dates) {
     const container = document.getElementById('dateCheckboxList');
     if (!container) return;
     container.innerHTML = '';
-    const sorted = [...dates].sort();
+    const sorted = [...dates]; // Already chronologically sorted ahead of time
     sorted.forEach(d => {
         const isChecked = selectedEndDates.size === 0 || selectedEndDates.has(d);
         const item = document.createElement('label');
@@ -362,7 +436,7 @@ function updateDateFilterLabel() {
     var btn = document.getElementById('dateFilterBtn');
     if (!label) return;
     if (selectedEndDates.size === 0) {
-        label.textContent = 'วันที่สิ้นสุดสัญญาฯ';
+        label.textContent = 'วันที่สิ้นสุดสัญญา';
         if (btn) btn.classList.remove('has-selection');
     } else if (selectedEndDates.size === 1) {
         label.textContent = [...selectedEndDates][0];
@@ -383,6 +457,18 @@ function renderAIAlert(data) {
     var thisMonth = now.getMonth();
     var thisYear = now.getFullYear();
     var thMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+    // Dynamic month based on date filter
+    if (selectedEndDates && selectedEndDates.size > 0) {
+        var firstDateStr = Array.from(selectedEndDates)[0];
+        if (firstDateStr && firstDateStr !== 'ไม่ระบุ') {
+            var parts = firstDateStr.split('/');
+            if (parts.length === 3) {
+                thisMonth = parseInt(parts[1]) - 1;
+                thisYear = parseInt(parts[2]);
+            }
+        }
+    }
 
     if (monthLabel) monthLabel.textContent = 'ประจำเดือน ' + thMonths[thisMonth] + ' ' + (thisYear + 543);
 
@@ -447,40 +533,57 @@ function parseDateStrToTimestamp(dateStr) {
     return 0; // fallback
 }
 
-// Fetch data directly using Google API, completely bypassing CORS and blocklists
+// Fetch data securely using Google Apps Script Web App
 async function fetchData() {
     showLoading(true);
     
     try {
-        const data = await fetchGvizData('0');
-        if (!data || data.length === 0 || !data[0]['ประทับเวลา']) {
-            showError("ไม่สามารถอ่านข้อมูลจากตารางได้ หรือไม่พบหัวข้อ 'ประทับเวลา'");
+        const email = sessionStorage.getItem('dashboardEmail') || '';
+        const pass = sessionStorage.getItem('dashboardPass') || '';
+        const url = `${API_URL}?action=getData&email=${encodeURIComponent(email)}&pass=${encodeURIComponent(pass)}`;
+        
+        const res = await fetch(url);
+        const result = await res.json();
+        
+        if (!result.ok) {
+            if (result.msg && result.msg.includes('Unauthorized')) {
+                alert('เซสชั่นของคุณหมดอายุ หรือรหัสผ่านมีการเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
+                forceLogout();
+                return;
+            }
+            showError("ไม่สามารถอ่านข้อมูลจากตารางได้ หรืออาจยังไม่มีข้อมูลลูกค้า");
             showLoading(false);
             return;
         }
-        processRawData(data);
+
+        if (!result.data || result.data.length < 2) {
+            showError("ไม่พบข้อมูลลูกค้าในระบบ");
+            showLoading(false);
+            return;
+        }
+        
+        const headers = result.data[0];
+        const rows = result.data.slice(1);
+        
+        // Convert 2D array to array of objects to maintain compatibility with existing logic
+        const formattedData = rows.map(row => {
+            let rowObj = {};
+            row.forEach((cell, i) => {
+                const header = headers[i];
+                if (header) {
+                    rowObj[header] = cell ? String(cell) : '';
+                }
+            });
+            return rowObj;
+        });
+
+        processRawData(formattedData);
         showLoading(false);
     } catch (error) {
-        console.error("fetchGvizData error:", error);
-        showError(`การดึงข้อมูล Google API ล้มเหลวสุดๆ 😅: ${error.message} \nบราวเซอร์อาจถูกตัดการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง`);
+        console.error("fetch API error:", error);
+        showError(`การดึงข้อมูล Google API ล้มเหลวสุดๆ 😅: ${error.message} \nบราวเซอร์อาจถูกตัดการเชื่อมต่อ หรือเซิร์ฟเวอร์ไม่ตอบสนอง`);
         showLoading(false);
     }
-}
-
-function parseCSVText(csvText) {
-    Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            if (results.errors && results.errors.length > 0 && results.data.length === 0) {
-                showError("ไม่สามารถอ่านข้อมูลจากตารางได้");
-                console.error(results.errors);
-                return;
-            }
-            processRawData(results.data);
-            showLoading(false);
-        }
-    });
 }
 
 function processRawData(data) {
@@ -541,7 +644,16 @@ function updateFilterOptions(dataSet) {
     });
 
     // Update available date list for checkbox filter
-    allAvailableEndDates = [...endDates].sort();
+    allAvailableEndDates = [...endDates].sort((a, b) => {
+        const p1 = a.split('/');
+        const p2 = b.split('/');
+        if (p1.length === 3 && p2.length === 3) {
+            const d1 = new Date(p1[2], parseInt(p1[1]) - 1, p1[0]);
+            const d2 = new Date(p2[2], parseInt(p2[1]) - 1, p2[0]);
+            return d1.getTime() - d2.getTime();
+        }
+        return a.localeCompare(b);
+    });
     renderDateCheckboxList(allAvailableEndDates);
 
     // Helper to update TomSelect silently
@@ -934,7 +1046,7 @@ function renderCards(data, showAll = false) {
 
             card.innerHTML = `
                 <div class="cell-client">
-                    <div class="client-name">${item.processedCustomer}</div>
+                    <div class="client-name" title="${item.processedCustomer}">${item.processedCustomer}</div>
                 </div>
                 
                 <div class="cell-province">
